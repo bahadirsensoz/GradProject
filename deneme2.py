@@ -89,7 +89,7 @@ with torch.no_grad():
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
-        correct += (predicted == labels).sum().itepm()
+        correct += (predicted == labels).sum().itepm() #itepm() yazim hatasi mi 
 
 accuracy = 100 * correct / total
 print(f'Accuracy on test set: {accuracy:.2f}%')
