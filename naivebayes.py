@@ -1,6 +1,7 @@
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import CountVectorizer
 import glob
 import os
@@ -20,6 +21,7 @@ class MammographyDataset:
         self.data_dir = data_dir
         self.data_transform = data_transform
         self.image_files = glob.glob(os.path.join(data_dir, '*.jpg'))
+        np.random.shuffle(self.image_files)
 
     def __len__(self):
         return len(self.image_files)
@@ -50,3 +52,8 @@ naive_bayes.fit(X_train, y_train)
 y_pred_nb = naive_bayes.predict(X_test)
 accuracy_nb = accuracy_score(y_test, y_pred_nb) * 100
 print(f'Accuracy on test set (Naive Bayes): {accuracy_nb:.2f}%')
+
+# cross-validation
+cv_scores = cross_val_score(naive_bayes, X, y, cv=5)  # 5-fold cross-validation
+print("Cross-Validation Scores:", cv_scores)
+print("Mean Accuracy:", np.mean(cv_scores))
