@@ -54,7 +54,8 @@ accuracy_bagging = accuracy_score(y_test, y_pred_bagging) * 100
 print(f'Accuracy on test set (Bagging Naive Bayes): {accuracy_bagging:.2f}%')
 
 # boosting
-boosting_naive_bayes = AdaBoostClassifier(GaussianNB(), n_estimators=10, random_state=42)
+boosting_naive_bayes = AdaBoostClassifier(GaussianNB(), n_estimators=10, algorithm='SAMME', random_state=42) #"FutureWarning: The SAMME.R algorithm (the default) is deprecated and will be removed in 1.6.
+                                                                                          #Use the SAMME algorithm to circumvent this warning" uyarısı geliyordu, algorithm='SAMME' ekleyerek çözülüyor.
 boosting_naive_bayes.fit(X_train, y_train)
 y_pred_boosting = boosting_naive_bayes.predict(X_test)
 accuracy_boosting = accuracy_score(y_test, y_pred_boosting) * 100
