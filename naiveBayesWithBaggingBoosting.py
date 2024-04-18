@@ -1,3 +1,4 @@
+import time
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import accuracy_score
 from sklearn.ensemble import BaggingClassifier, AdaBoostClassifier
@@ -39,6 +40,10 @@ class MammographyDataset:
 
 
 dataset = MammographyDataset(data_dir='D:/jpeg', data_transform=transform)
+
+print(f"Calculations started...")
+counter_start = time.time()  #Counter starts here for calculating total runtime
+
 X = dataset.transform(dataset.image_files)
 y = dataset.labels()
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -70,3 +75,6 @@ print("Bagging Mean Accuracy:", np.mean(bagging_cv_scores))
 boosting_cv_scores = cross_val_score(boosting_naive_bayes, X, y, cv=5)
 print("Boosting Cross-Validation Scores:", boosting_cv_scores)
 print("Boosting Mean Accuracy:", np.mean(boosting_cv_scores))
+
+counter_end = time.time()  #Program ends here
+print(f"Runtime of the program is {counter_end - counter_start:.2f} seconds.")
