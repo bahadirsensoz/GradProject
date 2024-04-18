@@ -40,6 +40,10 @@ class MammographyDataset:
 
 
 dataset = MammographyDataset(data_dir='D:/jpeg', data_transform=transform)
+
+print(f"Calculations started...")
+counter_start = time.time()  #Counter starts here for calculating total runtime
+
 X = dataset.transform(dataset.image_files)
 y = dataset.labels()
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -57,3 +61,6 @@ print(f'Accuracy on test set (Naive Bayes): {accuracy_nb:.2f}%')
 cv_scores = cross_val_score(naive_bayes, X, y, cv=5)  # 5-fold cross-validation
 print("Cross-Validation Scores:", cv_scores)
 print("Mean Accuracy:", np.mean(cv_scores))
+
+counter_end = time.time()  #Program ends here
+print(f"Runtime of the program is {counter_end - counter_start:.2f} seconds.")
