@@ -2,7 +2,6 @@ import time
 import psutil
 from sklearn.naive_bayes import GaussianNB
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import CountVectorizer
 import glob
@@ -58,6 +57,9 @@ naive_bayes.fit(X_train, y_train)
 y_pred_nb = naive_bayes.predict(X_test)
 accuracy_nb = accuracy_score(y_test, y_pred_nb) * 100
 print(f'Accuracy on test set (Naive Bayes): {accuracy_nb:.2f}%')
+
+f1_score_nb = f1_score(y_test, y_pred_nb, average='macro')*100  #We are computing F1 scores here and printing that
+print(f'F1 Score result: {f1_score_nb:.2f}%')  
 
 # cross-validation
 cv_scores = cross_val_score(naive_bayes, X, y, cv=5)  # 5-fold cross-validation
