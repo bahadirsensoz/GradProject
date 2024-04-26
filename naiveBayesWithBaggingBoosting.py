@@ -1,6 +1,6 @@
 import time
 from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.ensemble import BaggingClassifier, AdaBoostClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import CountVectorizer
@@ -52,11 +52,13 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 base_naive_bayes = GaussianNB()
 
 # bagging
-bagging_naive_bayes = BaggingClassifier(GaussianNB(), n_estimators=10, random_state=42)
+bagging_naive_bayes = BaggingClassifier(base_naive_bayes, n_estimators=10, random_state=42)
 bagging_naive_bayes.fit(X_train, y_train)
 y_pred_bagging = bagging_naive_bayes.predict(X_test)
 accuracy_bagging = accuracy_score(y_test, y_pred_bagging) * 100
+f1_bagging = f1_score(y_test, y_pred_bagging, average='weighted') * 100 #F1 Scores added here
 print(f'Accuracy on test set (Bagging Naive Bayes): {accuracy_bagging:.2f}%')
+print(f'F1 Score on test set (Bagging Naive Bayes): {f1_bagging:.2f}%')
 
 # boosting
 boosting_naive_bayes = AdaBoostClassifier(GaussianNB(), n_estimators=10, algorithm='SAMME', random_state=42) #"FutureWarning: The SAMME.R algorithm (the default) is deprecated and will be removed in 1.6.
@@ -64,7 +66,10 @@ boosting_naive_bayes = AdaBoostClassifier(GaussianNB(), n_estimators=10, algorit
 boosting_naive_bayes.fit(X_train, y_train)
 y_pred_boosting = boosting_naive_bayes.predict(X_test)
 accuracy_boosting = accuracy_score(y_test, y_pred_boosting) * 100
+f1_boosting = f1_score(y_test, y_pred_boosting, average='weighted') * 100 #F1 Scores added here
 print(f'Accuracy on test set (Boosting Naive Bayes): {accuracy_boosting:.2f}%')
+print(f'F1 Score on test set (Boosting Naive Bayes): {f1_boosting:.2f}%')
+
 
 # cross-validation with bagging
 bagging_cv_scores = cross_val_score(bagging_naive_bayes, X, y, cv=5)
