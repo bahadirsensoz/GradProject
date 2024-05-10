@@ -1,9 +1,10 @@
 import time
 import psutil
 from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import CountVectorizer
+from statistics import harmonic_mean
 import glob
 import os
 from PIL import Image
@@ -61,7 +62,15 @@ print(f'Accuracy on test set (Naive Bayes): {accuracy_nb:.2f}%')
 f1_score_nb = f1_score(y_test, y_pred_nb, average='macro')*100  #We are computing F1 scores here and printing that
 print(f'F1 Score result: {f1_score_nb:.2f}%')  
 
-# cross-validation
+#calculating recall here
+recall_nb = recall_score(y_test, y_pred_nb, average='macro')*100
+print(f'Recall result: {recall_nb:.2f}%')
+
+#Harmonic mean of accuracy, f1 scores and recall are done here, we can add or remove more metrics afterwards
+harmonic_mean_value = harmonic_mean([accuracy_nb, f1_score_nb, recall_nb])
+print(f'Harmonic Mean of Accuracy, F1 Score, and Recall: {harmonic_mean_value:.2f}%')
+
+# cross-validation 
 cv_scores = cross_val_score(naive_bayes, X, y, cv=5)  # 5-fold cross-validation
 print("Cross-Validation Scores:", cv_scores)
 print("Mean Accuracy:", np.mean(cv_scores))
