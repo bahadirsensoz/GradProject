@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 import glob
 import os
 from PIL import Image
+import time
 
 #GPU kullanma denemesi olarak (cuda)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -37,6 +38,10 @@ class MammographyDataset(Dataset):
 
 
 dataset = MammographyDataset(data_dir="C:/Users/canok/OneDrive/Masaüstü/bitirme/jpeg", data_transform=transform) #transform yukarıda
+
+print(f'Calculations started...')
+#starting to record time just after declaring dataset as we did in naive
+start_time = time.time()
 
 # train/test
 train_set, test_set = train_test_split(dataset, test_size=0.2, random_state=42)
@@ -98,3 +103,9 @@ with torch.no_grad():
 
 accuracy = 100 * correct / total
 print(f'Accuracy on test set: {accuracy:.2f}%')
+
+#end of computations
+end_time = time.time()
+#printing total time here
+total_runtime = end_time - start_time
+print(f'Total runtime is: {total_runtime:.2f} seconds')
