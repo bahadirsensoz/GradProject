@@ -3,6 +3,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score
 import glob
 import os
 from PIL import Image
@@ -93,6 +94,9 @@ for epoch in range(num_epochs):
 # model test
 correct = 0
 total = 0
+all_labels = []
+all_predictions = []
+
 with torch.no_grad():
     for images, labels in test_loader:
         images, labels = images.to(device), labels.to(device)  #CUDA DENEME
@@ -100,9 +104,18 @@ with torch.no_grad():
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
-
+        all_labels.extend(labels.cpu().numpy()) #When experimenting, I found that we have to use .cpu() to use the numpy functions, moving them to cpu to do calculations.
+        all_predictions.extend(predicted.cpu().numpy()) #After doing that, we can use numpy function to store our values into arrays, that we will store in all_labels and all_predictions arrays.
+        
 accuracy = 100 * correct / total
+precision = 100 * precision_score(all_labels, all_predictions, average='macro')
+recall = 100 * recall_score(all_labels, all_predictions, average='macro')
+f1 = 100 * f1_score(all_labels, all_predictions, average='macro')
+
 print(f'Accuracy on test set: {accuracy:.2f}%')
+print(f'Precision on test set: {precision:.2f}%')
+print(f'Recall on test set: {recall:.2f}%')
+print(f'F1 Score on test set: {f1:.2f}%')
 
 #end of computations
 end_time = time.time()
