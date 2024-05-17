@@ -8,6 +8,7 @@ import glob
 import os
 from PIL import Image
 import time
+import psutil
 
 #GPU kullanma denemesi olarak (cuda)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -43,6 +44,8 @@ dataset = MammographyDataset(data_dir="C:/Users/canok/OneDrive/Masaüstü/bitirm
 print(f'Calculations started...')
 #starting to record time just after declaring dataset as we did in naive
 start_time = time.time()
+cpu_start = psutil.cpu_percent(interval=1) #Same we used in naivebayes.py
+memory_start = psutil.virtual_memory()
 
 # train/test
 train_set, test_set = train_test_split(dataset, test_size=0.2, random_state=42)
@@ -121,4 +124,9 @@ print(f'F1 Score on test set: {f1:.2f}%')
 end_time = time.time()
 #printing total time here
 total_runtime = end_time - start_time
+cpu_end = psutil.cpu_percent(interval=1) #Set to 1 second, can be adjusted if we want
+memory_end = psutil.virtual_memory()
+
 print(f'Total runtime is: {total_runtime:.2f} seconds')
+print(f'Initial CPU usage: {cpu_start}%, Final CPU usage: {cpu_end}%')
+print(f'Initial Memory usage: {memory_start.percent}%, Final Memory usage: {memory_end.percent}%')
