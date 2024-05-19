@@ -45,7 +45,7 @@ Explanation: First, we are defining the location of dataset, and following that,
 
 ## Script Details in Basic Form
 
-The script performs the following steps (example for naïve bayes classifier):
+The script performs the following steps (example for naive bayes classifier):
 
 1. **Imports necessary libraries**.
 2. **Defines transformations for image preprocessing**.
