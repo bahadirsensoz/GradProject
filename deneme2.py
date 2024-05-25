@@ -14,15 +14,16 @@ transform = transforms.Compose([
 
 
 class MammographyDataset(Dataset):
-    def __init__(self, data_dir, data_transform=None):
+    def _init_(self, data_dir, data_transform=None):
         self.data_dir = data_dir
         self.data_transform = data_transform
         self.image_files = glob.glob(os.path.join(data_dir, '*.jpg'))
         # os.listdir kullanınca perm hatası veriyor, glob kullanıldı
-    def __len__(self):
+
+    def _len_(self):
         return len(self.image_files)
 
-    def __getitem__(self, idx):
+    def _getitem_(self, idx):
         img_name = self.image_files[idx]
         image = Image.open(img_name)
         # baştaki 1 ve 2 sayısını label olarak al
@@ -44,8 +45,8 @@ test_loader = DataLoader(test_set, batch_size=32, shuffle=False)
 
 # CNN modeli
 class CNNModel(nn.Module):
-    def __init__(self):
-        super(CNNModel, self).__init__()
+    def _init_(self):
+        super(CNNModel, self)._init_()
         # Define the layers of your CNN
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
@@ -81,6 +82,12 @@ for epoch in range(num_epochs):
 
     print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
 
+# Initialize counters for calculating Se, Sp, Acc, and JI
+true_positive = 0
+true_negative = 0
+false_positive = 0
+false_negative = 0
+
 # model test
 correct = 0
 total = 0
@@ -89,7 +96,27 @@ with torch.no_grad():
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
-        correct += (predicted == labels).sum().itepm() #itepm() yazim hatasi mi 
+        correct += (predicted == labels).sum().item()
+
+        # Calculate confusion matrix values
+        for i in range(len(labels)):
+            if labels[i] == 1 and predicted[i] == 1:
+                true_positive += 1
+            elif labels[i] == 0 and predicted[i] == 0:
+                true_negative += 1
+            elif labels[i] == 0 and predicted[i] == 1:
+                false_positive += 1
+            elif labels[i] == 1 and predicted[i] == 0:
+                false_negative += 1
 
 accuracy = 100 * correct / total
 print(f'Accuracy on test set: {accuracy:.2f}%')
+
+# Calculate Se, Sp, and JI
+sensitivity = true_positive / (true_positive + false_negative)
+specificity = true_negative / (true_negative + false_positive)
+jaccard_index = true_positive / (true_positive + false_positive + false_negative)
+
+print(f'Sensitivity: {sensitivity:.2f}')
+print(f'Specificity: {specificity:.2f}')
+print(f'Jaccard Index: {jaccard_index:.2f}')
