@@ -18,6 +18,9 @@ import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
+#checking for gpu if it is avaiable to use
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # needed transformations
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -62,10 +65,11 @@ y_test = np.array(y_test)
 # random forest 
 print("Training Random Forest Classifier...")
 vit_model = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT)
-vit_features = [vit_model(torch.tensor(img).unsqueeze(0)).detach().numpy().flatten() for img in X_train]
+vit_model = vit_model.to(device) #since we are utilizing GPU now, moving the model to the GPU is required 
+vit_features = [vit_model(torch.tensor(img).unsqueeze(0).to(device)).cpu().detach().numpy().flatten() for img in X_train]
 rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
 rf_model.fit(vit_features, y_train)
-vit_features_test = [vit_model(torch.tensor(img).unsqueeze(0)).detach().numpy().flatten() for img in X_test]
+vit_features_test = [vit_model(torch.tensor(img).unsqueeze(0).to(device)).cpu().detach().numpy().flatten() for img in X_test]
 y_pred_rf = rf_model.predict(vit_features_test)
 print("Random Forest Classifier trained.")
 
@@ -96,7 +100,7 @@ class CNNModel(nn.Module):
         return x
 
 print("Training CNN Model...")
-cnn_model = CNNModel()
+cnn_model = CNNModel().to(device) #since we are utilizing GPU now, moving the model to the GPU is required 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(cnn_model.parameters(), lr=0.001)
 
@@ -106,8 +110,8 @@ test_loader = DataLoader(list(zip(X_test, y_test)), batch_size=16, shuffle=False
 num_epochs = 5
 for epoch in range(num_epochs):
     for images, labels in train_loader:
-        images = torch.tensor(images).float()
-        labels = torch.tensor(labels).long()
+        images = torch.tensor(images).float().to(device) #since we are utilizing GPU now, moving the model to the GPU is required 
+        labels = torch.tensor(labels).long().to(device)
 
         optimizer.zero_grad()
         outputs = cnn_model(images)
@@ -121,12 +125,12 @@ print("CNN Model trained.")
 y_pred_cnn = []
 with torch.no_grad():
     for images, labels in test_loader:
-        images = torch.tensor(images).float()
-        labels = torch.tensor(labels).long()
+        images = torch.tensor(images).float().to(device) #since we are utilizing GPU now, moving the model to the GPU is required 
+        labels = torch.tensor(labels).long().to(device)
 
         outputs = cnn_model(images)
         _, predicted = torch.max(outputs.data, 1)
-        y_pred_cnn.extend(predicted.numpy())
+        y_pred_cnn.extend(predicted.cpu().numpy())
 
 # majority voting part
 print("Performing Majority Voting...")
