@@ -3,10 +3,12 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score
 import glob
 import os
 from PIL import Image
 import time
+import psutil
 
 #GPU kullanma denemesi olarak (cuda)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -42,6 +44,8 @@ dataset = MammographyDataset(data_dir="C:/Users/canok/OneDrive/Masaüstü/bitirm
 print(f'Calculations started...')
 #starting to record time just after declaring dataset as we did in naive
 start_time = time.time()
+cpu_start = psutil.cpu_percent(interval=1) #Same we used in naivebayes.py
+memory_start = psutil.virtual_memory()
 
 # train/test
 train_set, test_set = train_test_split(dataset, test_size=0.2, random_state=42)
@@ -93,6 +97,9 @@ for epoch in range(num_epochs):
 # model test
 correct = 0
 total = 0
+all_labels = []
+all_predictions = []
+
 with torch.no_grad():
     for images, labels in test_loader:
         images, labels = images.to(device), labels.to(device)  #CUDA DENEME
@@ -100,12 +107,26 @@ with torch.no_grad():
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
-
+        all_labels.extend(labels.cpu().numpy()) #When experimenting, I found that we have to use .cpu() to use the numpy functions, moving them to cpu to do calculations.
+        all_predictions.extend(predicted.cpu().numpy()) #After doing that, we can use numpy function to store our values into arrays, that we will store in all_labels and all_predictions arrays.
+        
 accuracy = 100 * correct / total
+precision = 100 * precision_score(all_labels, all_predictions, average='macro')
+recall = 100 * recall_score(all_labels, all_predictions, average='macro')
+f1 = 100 * f1_score(all_labels, all_predictions, average='macro')
+
 print(f'Accuracy on test set: {accuracy:.2f}%')
+print(f'Precision on test set: {precision:.2f}%')
+print(f'Recall on test set: {recall:.2f}%')
+print(f'F1 Score on test set: {f1:.2f}%')
 
 #end of computations
 end_time = time.time()
 #printing total time here
 total_runtime = end_time - start_time
+cpu_end = psutil.cpu_percent(interval=1) #Set to 1 second, can be adjusted if we want
+memory_end = psutil.virtual_memory()
+
 print(f'Total runtime is: {total_runtime:.2f} seconds')
+print(f'Initial CPU usage: {cpu_start}%, Final CPU usage: {cpu_end}%')
+print(f'Initial Memory usage: {memory_start.percent}%, Final Memory usage: {memory_end.percent}%')
