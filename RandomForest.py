@@ -7,7 +7,7 @@ import matplotlib.image as mpimg
 import tensorflow as tf
 import cv2
 from sklearn.model_selection import train_test_split
-from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, jaccard_score
 from keras.applications.vgg16 import VGG16, preprocess_input
 from keras.preprocessing.image import ImageDataGenerator
@@ -139,13 +139,13 @@ train_features = np.reshape(train_features, (len(X_train), 7 * 7 * 512))
 val_features = np.reshape(val_features, (len(X_val), 7 * 7 * 512))
 test_features = np.reshape(test_features, (len(X_test), 7 * 7 * 512))
 
-# Train a Naive Bayes classifier
-gnb = GaussianNB()
-gnb.fit(train_features, train_labels)
+# Train a RandomForest classifier
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(train_features, train_labels)
 
 # Evaluate the model
-y_pred_train = gnb.predict(train_features)
-y_pred_test = gnb.predict(test_features)
+y_pred_train = rf.predict(train_features)
+y_pred_test = rf.predict(test_features)
 
 train_cm = confusion_matrix(train_labels, y_pred_train)
 test_cm = confusion_matrix(test_labels, y_pred_test)
