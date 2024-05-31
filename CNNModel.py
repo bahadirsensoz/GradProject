@@ -1,122 +1,260 @@
-import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader, Dataset
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import pandas as pd
+import matplotlib.image as mpimg
+import tensorflow as tf
+import cv2
 from sklearn.model_selection import train_test_split
-import glob
 import os
-from PIL import Image
+from keras.utils import to_categorical
+from keras.preprocessing.image import ImageDataGenerator
+from sklearn.metrics import classification_report, confusion_matrix, jaccard_score
+import tensorflow_addons as tfa
+from tensorflow_addons.optimizers import AdamW
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-])
+# Load metadata
+df_meta = pd.read_csv('F:/Dataset/archive/csv/meta.csv')
+df_dicom = pd.read_csv('F:/Dataset/archive/csv/dicom_info.csv', delimiter=';')
 
+cropped_images = df_dicom[df_dicom.SeriesDescription == 'cropped images'].image_path
+full_mammo = df_dicom[df_dicom.SeriesDescription == 'full mammogram images'].image_path
+roi_img = df_dicom[df_dicom.SeriesDescription == 'ROI mask images'].image_path
 
-class MammographyDataset(Dataset):
-    def _init_(self, data_dir, data_transform=None):
-        self.data_dir = data_dir
-        self.data_transform = data_transform
-        self.image_files = glob.glob(os.path.join(data_dir, '*.jpg'))
-        # os.listdir kullanınca perm hatası veriyor, glob kullanıldı
+imdir = 'F:/Dataset/archive/jpeg'
+cropped_images = cropped_images.replace('CBIS-DDSM/jpeg', imdir, regex=True)
+full_mammo = full_mammo.replace('CBIS-DDSM/jpeg', imdir, regex=True)
+roi_img = roi_img.replace('CBIS-DDSM/jpeg', imdir, regex=True)
 
-    def _len_(self):
-        return len(self.image_files)
+# Organize image paths
+full_mammo_dict = {dicom.split("/")[4]: dicom for dicom in full_mammo}
+cropped_images_dict = {dicom.split("/")[4]: dicom for dicom in cropped_images}
+roi_img_dict = {dicom.split("/")[4]: dicom for dicom in roi_img}
 
-    def _getitem_(self, idx):
-        img_name = self.image_files[idx]
-        image = Image.open(img_name)
-        # baştaki 1 ve 2 sayısını label olarak al
-        label = int(os.path.basename(img_name).split('-')[0])
-        label = label - 1  # labellar 0-1 olsun istiyoruz
-        if self.data_transform:
-            image = self.data_transform(image)
-        return image, label
+# Load the mass dataset
+mass_train = pd.read_csv('F:/Dataset/archive/csv/mass_case_description_train_set.csv')
+mass_test = pd.read_csv('F:/Dataset/archive/csv/mass_case_description_test_set.csv')
 
+def fix_image_path(data):
+    for index, img in enumerate(data.values):
+        img_name = img[11].split("/")[2]
+        data.iloc[index, 11] = full_mammo_dict[img_name]
+        img_name = img[12].split("/")[2]
+        data.iloc[index, 12] = cropped_images_dict[img_name]
 
-dataset = MammographyDataset(data_dir='D:/jpeg', data_transform=transform) #transform yukarıda
+fix_image_path(mass_train)
+fix_image_path(mass_test)
 
-# train/test
-train_set, test_set = train_test_split(dataset, test_size=0.2, random_state=42)
+mass_train = mass_train.rename(columns={
+    'left or right breast': 'left_or_right_breast',
+    'image view': 'image_view',
+    'abnormality id': 'abnormality_id',
+    'abnormality type': 'abnormality_type',
+    'mass shape': 'mass_shape',
+    'mass margins': 'mass_margins',
+    'image file path': 'image_file_path',
+    'cropped image file path': 'cropped_image_file_path',
+    'ROI mask file path': 'ROI_mask_file_path'
+})
 
-train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_set, batch_size=32, shuffle=False)
+mass_test = mass_test.rename(columns={
+    'left or right breast': 'left_or_right_breast',
+    'image view': 'image_view',
+    'abnormality id': 'abnormality_id',
+    'abnormality type': 'abnormality_type',
+    'mass shape': 'mass_shape',
+    'mass margins': 'mass_margins',
+    'image file path': 'image_file_path',
+    'cropped image file path': 'cropped_image_file_path',
+    'ROI mask file path': 'ROI_mask_file_path'
+})
 
+mass_train['mass_shape'] = mass_train['mass_shape'].fillna(method='bfill')
+mass_train['mass_margins'] = mass_train['mass_margins'].fillna(method='bfill')
+mass_test['mass_margins'] = mass_test['mass_margins'].fillna(method='bfill')
 
-# CNN modeli
-class CNNModel(nn.Module):
-    def _init_(self):
-        super(CNNModel, self)._init_()
-        # Define the layers of your CNN
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
-        # Adjusted input size for fc1
-        self.fc1 = nn.Linear(32 * 224 * 224, 1000)  # tensor'ün boyutuna göre ayarlandı
-        self.fc2 = nn.Linear(1000, 2)
+full_mass = pd.concat([mass_train, mass_test], axis=0)
 
-    def forward(self, x):
-        x = torch.relu(self.conv1(x))
-        x = torch.relu(self.conv2(x))
-        # Flatten the output tensor (internetten bakıldı, hata çözümü için)
-        x = x.view(x.size(0), -1)
-        x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+# Image preprocessing
+def image_processor(image_path, target_size):
+    absolute_image_path = os.path.abspath(image_path)
+    image = cv2.imread(absolute_image_path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (target_size[1], target_size[0]))
+    image_array = image / 255.0
+    return image_array
 
+# Preprocess and prepare dataset
+def preprocess_images(image_paths, target_size=(224, 224)):
+    images = []
+    for image_path in image_paths:
+        image = image_processor(image_path, target_size)
+        images.append(image)
+    return np.array(images)
 
-model = CNNModel()
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+X = preprocess_images(full_mass['image_file_path'])
+y = full_mass['pathology'].replace({'MALIGNANT': 1, 'BENIGN': 0, 'BENIGN_WITHOUT_CALLBACK': 0}).values
 
-num_epochs = 10
-for epoch in range(num_epochs):
-    for images, labels in train_loader:
-        # Forward pass
-        outputs = model(images)
-        loss = criterion(outputs, labels)
+# Train test split
+X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, random_state=42)
+X_test, X_val, y_test, y_val = train_test_split(X_temp, y_temp, test_size=0.33, random_state=42)
 
-        # Backward and optimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+# Convert integer labels to one-hot encoded labels
+y_train = to_categorical(y_train, 2)
+y_test = to_categorical(y_test, 2)
+y_val = to_categorical(y_val, 2)
 
-    print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+# Data augmentation
+train_datagen = ImageDataGenerator(rotation_range=40,
+                                   width_shift_range=0.2,
+                                   height_shift_range=0.2,
+                                   shear_range=0.2,
+                                   zoom_range=0.2,
+                                   horizontal_flip=True,
+                                   fill_mode='nearest')
 
-# Initialize counters for calculating Se, Sp, Acc, and JI
-true_positive = 0
-true_negative = 0
-false_positive = 0
-false_negative = 0
+train_data_augmented = train_datagen.flow(X_train, y_train, batch_size=32)
 
-# model test
-correct = 0
-total = 0
-with torch.no_grad():
-    for images, labels in test_loader:
-        outputs = model(images)
-        _, predicted = torch.max(outputs.data, 1)
-        total += labels.size(0)
-        correct += (predicted == labels).sum().item()
+# Ensure the shape is correct after augmentation
+def check_batch_shape(data_gen):
+    for X_batch, y_batch in data_gen:
+        print(f"Batch X shape: {X_batch.shape}")
+        break
 
-        # Calculate confusion matrix values
-        for i in range(len(labels)):
-            if labels[i] == 1 and predicted[i] == 1:
-                true_positive += 1
-            elif labels[i] == 0 and predicted[i] == 0:
-                true_negative += 1
-            elif labels[i] == 0 and predicted[i] == 1:
-                false_positive += 1
-            elif labels[i] == 1 and predicted[i] == 0:
-                false_negative += 1
+check_batch_shape(train_data_augmented)
 
-accuracy = 100 * correct / total
-print(f'Accuracy on test set: {accuracy:.2f}%')
+# Enable mixed precision
+tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
-# Calculate Se, Sp, and JI
-sensitivity = true_positive / (true_positive + false_negative)
-specificity = true_negative / (true_negative + false_positive)
-jaccard_index = true_positive / (true_positive + false_positive + false_negative)
+# Define distributed training strategy
+strategy = tf.distribute.MirroredStrategy()
 
-print(f'Sensitivity: {sensitivity:.2f}')
-print(f'Specificity: {specificity:.2f}')
-print(f'Jaccard Index: {jaccard_index:.2f}')
+with strategy.scope():
+    # Define a CNN model
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dense(2, activation='softmax', dtype='float32')
+    ])
+
+    model.compile(
+        optimizer=AdamW(learning_rate=0.0001, weight_decay=0.0001),
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
+
+# Define the learning rate schedule function
+def lr_schedule(epoch, lr):
+    if epoch < 7:
+        return lr
+    else:
+        return lr * tf.math.exp(-0.01)
+
+# Implement early stopping and learning rate scheduler
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+lr_scheduler = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
+
+# Train model
+history = model.fit(
+    train_datagen.flow(X_train, y_train, batch_size=32),
+    epochs=100,
+    validation_data=(X_val, y_val),
+    callbacks=[early_stopping, lr_scheduler]
+)
+
+model.summary()
+
+# Evaluate the model
+model.evaluate(X_test, y_test)
+
+# Classification reports and confusion matrix
+cm_labels = ['MALIGNANT', 'BENIGN']
+
+y_pred_test = model.predict(X_test)
+y_pred_train = model.predict(X_train)
+
+y_pred_classes_test = np.argmax(y_pred_test, axis=1)
+y_pred_classes_train = np.argmax(y_pred_train, axis=1)
+
+y_true_classes_test = np.argmax(y_test, axis=1)
+y_true_classes_train = np.argmax(y_train, axis=1)
+
+test_report = classification_report(y_true_classes_test, y_pred_classes_test, target_names=cm_labels)
+train_report = classification_report(y_true_classes_train, y_pred_classes_train, target_names=cm_labels)
+
+test_cm = confusion_matrix(y_true_classes_test, y_pred_classes_test)
+train_cm = confusion_matrix(y_true_classes_train, y_pred_classes_train)
+
+def plot_confusion_matrix(cm, labels, title):
+    row_sums = cm.sum(axis=1, keepdims=True)
+    normalized_cm = cm / row_sums
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(normalized_cm, annot=True, fmt='.2%', cmap='Blues', cbar=False,
+                xticklabels=labels, yticklabels=labels)
+    plt.title(title, fontsize=14)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.show()
+
+print(f"Train Set Classification report:\n {train_report}\n")
+plot_confusion_matrix(train_cm, cm_labels, 'Train Set Confusion Matrix')
+
+print(f"Test Set Classification report:\n {test_report}\n")
+plot_confusion_matrix(test_cm, cm_labels, 'Test Set Confusion Matrix')
+
+# Calculate additional metrics
+def calculate_metrics(cm):
+    tn, fp, fn, tp = cm.ravel()
+    accuracy = (tp + tn) / (tp + tn + fp + fn)
+    sensitivity = tp / (tp + fn)
+    specificity = tn / (tn + fp)
+    precision = tp / (tp + fp)
+    jaccard = jaccard_score(y_true_classes_test, y_pred_classes_test)
+    return accuracy, sensitivity, specificity, precision, jaccard
+
+train_accuracy, train_sensitivity, train_specificity, train_precision, train_jaccard = calculate_metrics(train_cm)
+test_accuracy, test_sensitivity, test_specificity, test_precision, test_jaccard = calculate_metrics(test_cm)
+
+print(f"Train Set Metrics:\n Accuracy: {train_accuracy:.4f}\n Sensitivity: {train_sensitivity:.4f}\n Specificity: {train_specificity:.4f}\n Precision: {train_precision:.4f}\n Jaccard Index: {train_jaccard:.4f}\n")
+print(f"Test Set Metrics:\n Accuracy: {test_accuracy:.4f}\n Sensitivity: {test_sensitivity:.4f}\n Specificity: {test_specificity:.4f}\n Precision: {test_precision:.4f}\n Jaccard Index: {test_jaccard:.4f}\n")
+
+# Plot training history
+history_dict = history.history
+
+loss_values = history_dict['loss']
+val_loss_values = history_dict['val_loss']
+acc = history_dict['accuracy']
+
+epochs = range(1, len(acc) + 1)
+
+plt.plot(epochs, loss_values, 'b', label='Training Loss')
+plt.plot(epochs, val_loss_values, 'r', label='Validation Loss')
+plt.title('Training and Validation Loss', fontsize=12)
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+val_acc_values = history_dict['val_accuracy']
+acc = history_dict['accuracy']
+
+plt.plot(epochs, acc, 'b', label='Training Accuracy')
+plt.plot(epochs, val_acc_values, 'r', label='Validation Accuracy')
+plt.title('Training and Validation Accuracy', fontsize=12)
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.show()
+
+# Save the model
+model_save_path = "F:/Dataset/archive/cnn_model.keras"
+model.save(model_save_path)
